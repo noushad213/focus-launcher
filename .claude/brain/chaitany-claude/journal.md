@@ -817,3 +817,18 @@ td, th, figcaption, h2, summary`, the facts and the footer outside `.phone`:
 **Lesson kept:** he stopped a tool call that was only waiting for CI. Do not block a turn on a
 CI run he did not ask to wait for; start what he asked for and check CI afterwards.
 
+## 2026-09-29 · Download all project dependencies
+
+**Asked:** "download all the dependencies".
+**Done:**
+- Created `local.properties` (git-ignored) with `sdk.dir` pointing to the local Android SDK (`C:\Users\noush\AppData\Local\Android\Sdk`).
+- Resolved and downloaded all project, subproject, and plugin dependencies via `.\gradlew.bat :app:dependencies`.
+- Ran `.\gradlew.bat :app:testDebugUnitTest`, `.\gradlew.bat :app:assembleDebug`, and `.\gradlew.bat :app:lintDebug` to ensure all compiler tools, AAPT2, Compose compiler plugins, test runners, dexing tools, and Android Lint analysis models are downloaded and cached.
+**Verified:**
+- `:app:dependencies`: resolved and downloaded all configurations (BUILD SUCCESSFUL).
+- `:app:testDebugUnitTest`: 26 actionable tasks executed, all unit tests passed.
+- `:app:assembleDebug`: 39 actionable tasks executed, debug APK built successfully.
+- `:app:lintDebug`: 30 actionable tasks executed, 0 errors.
+- `git status`: working tree clean (no tracked files modified, `local.properties` ignored).
+**Open:** none.
+

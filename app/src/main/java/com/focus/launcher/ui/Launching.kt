@@ -97,11 +97,10 @@ fun launchApp(context: Context, scope: CoroutineScope, entry: AppEntry) {
     }
 }
 
-/** The phone's web search box (the Google app where there is one), as the page left of home. */
+/** Opens whichever app Android provides for web search. */
 fun openWebSearch(context: Context) {
     val ok = Perms.start(
         context,
-        Intent(SearchManager.INTENT_ACTION_GLOBAL_SEARCH).setPackage("com.google.android.googlequicksearchbox"),
         Intent(SearchManager.INTENT_ACTION_GLOBAL_SEARCH),
         Intent(Intent.ACTION_WEB_SEARCH).putExtra(SearchManager.QUERY, ""),
         options = launchOptions(context),

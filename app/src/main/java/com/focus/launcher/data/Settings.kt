@@ -40,6 +40,83 @@ const val TAP_SCREEN_TIME = "tap:screentime"
 const val TAP_BATTERY = "tap:battery"
 const val TAP_NOTHING = "tap:none"
 
+/** Shared action vocabulary for home gestures and edge pills. Arguments are action-specific. */
+enum class ActionType(val label: String) {
+    NONE("Nothing"), OPEN_APP("Open app"), APP_DRAWER("App drawer"), APP_SEARCH("Search apps"),
+    NOTIFICATIONS("Notifications"), WEB_SEARCH("Web search"), OPEN_URL("Open URL"),
+    LOCK_DEVICE("Lock device"), ALARMS("Alarms"), SELECTED_BROWSER("Open browser"), SETTINGS("Settings"), PILLS("Pill settings"),
+    TODO("Todo"), NOTE("Note"), FOCUS_SETUP("Focus setup"),
+}
+
+data class TodoItem(val id: String, val text: String, val done: Boolean = false) {
+    fun toJson() = JSONObject().put("id", id).put("text", text).put("done", done)
+
+    companion object {
+        fun fromJson(value: JSONObject): TodoItem? {
+            val id = value.optString("id").takeIf { it.isNotBlank() } ?: return null
+            val text = value.optString("text").trim().take(160).takeIf { it.isNotBlank() } ?: return null
+            return TodoItem(id, text, value.optBoolean("done", false))
+        }
+    }
+}
+
+data class LauncherAction(val type: ActionType, val argument: String = "") {
+    fun toJson() = JSONObject().put("type", type.name).put("argument", argument)
+
+    companion object {
+        fun fromJson(value: JSONObject?): LauncherAction? {
+            if (value == null) return null
+            val type = ActionType.entries.firstOrNull { it.name == value.optString("type") } ?: return null
+            return LauncherAction(type, value.optString("argument"))
+        }
+    }
+}
+
+enum class GestureTrigger(val label: String) {
+    SWIPE_UP("Swipe up"), SWIPE_DOWN("Swipe down"), SWIPE_LEFT("Swipe left"), SWIPE_RIGHT("Swipe right"),
+    DOUBLE_TAP("Double tap"), LONG_PRESS("Long press"),
+}
+
+enum class PillEdge(val label: String) { LEFT("Left edge"), RIGHT("Right edge") }
+
+data class EdgePill(
+    val id: String,
+    val name: String,
+    val icon: String = "",
+    val edge: PillEdge = PillEdge.RIGHT,
+    val verticalPosition: Int = 50,
+    val visiblePercent: Int = 70,
+    val widthDp: Int = 88,
+    val enabled: Boolean = true,
+    val tapAction: LauncherAction = LauncherAction(ActionType.NONE),
+    val longPressAction: LauncherAction = LauncherAction(ActionType.PILLS),
+    val inwardSwipeAction: LauncherAction = LauncherAction(ActionType.NONE),
+) {
+    fun toJson() = JSONObject().put("id", id).put("name", name).put("icon", icon).put("edge", edge.name)
+        .put("position", verticalPosition).put("visible", visiblePercent).put("width", widthDp)
+        .put("enabled", enabled).put("tap", tapAction.toJson())
+        .put("long", longPressAction.toJson()).put("swipe", inwardSwipeAction.toJson())
+
+    companion object {
+        fun fromJson(value: JSONObject): EdgePill? {
+            val id = value.optString("id").takeIf { it.isNotBlank() } ?: return null
+            return EdgePill(
+                id = id,
+                name = value.optString("name", "Pill").take(16),
+                icon = value.optString("icon").take(2),
+                edge = PillEdge.entries.firstOrNull { it.name == value.optString("edge") } ?: PillEdge.RIGHT,
+                verticalPosition = value.optInt("position", 50).coerceIn(5, 95),
+                visiblePercent = value.optInt("visible", 70).coerceIn(50, 80),
+                widthDp = value.optInt("width", 88).coerceIn(72, 112),
+                enabled = value.optBoolean("enabled", true),
+                tapAction = LauncherAction.fromJson(value.optJSONObject("tap")) ?: LauncherAction(ActionType.NONE),
+                longPressAction = LauncherAction.fromJson(value.optJSONObject("long")) ?: LauncherAction(ActionType.PILLS),
+                inwardSwipeAction = LauncherAction.fromJson(value.optJSONObject("swipe")) ?: LauncherAction(ActionType.NONE),
+            )
+        }
+    }
+}
+
 /**
  * Every user-facing preference of the launcher. Immutable; changed through [SettingsStore.update].
  *
@@ -129,6 +206,9 @@ data class Settings(
     /** Swipe towards the page left of home (finger moves right): the phone's web search. */
     val swipeRightSearch: Boolean = true,
     val doubleTapLock: Boolean = true,
+    val gestureActions: Map<GestureTrigger, LauncherAction> = defaultGestureActions(),
+    val edgePills: List<EdgePill> = emptyList(),
+    val todos: List<TodoItem> = emptyList(),
 ) {
     fun toJson(): JSONObject = JSONObject().apply {
         put("v", SCHEMA)
@@ -188,12 +268,15 @@ data class Settings(
         put("swipeUpSearch", swipeUpSearch)
         put("swipeRightSearch", swipeRightSearch)
         put("doubleTapLock", doubleTapLock)
+        put("gestureActions", JSONObject().apply { gestureActions.forEach { (trigger, action) -> put(trigger.name, action.toJson()) } })
+        put("edgePills", JSONArray().apply { edgePills.forEach { put(it.toJson()) } })
+        put("todos", JSONArray().apply { todos.forEach { put(it.toJson()) } })
     }
 
     companion object {
         /** Tolerant of missing keys, so older saved settings survive app updates. */
         /** Version of the stored settings. Bump it only when an old stored value has to be reinterpreted. */
-        const val SCHEMA = 2
+        const val SCHEMA = 5
 
         fun fromJson(o: JSONObject): Settings {
             val d = Settings()
@@ -265,6 +348,24 @@ data class Settings(
                 swipeUpSearch = o.optBoolean("swipeUpSearch", d.swipeUpSearch),
                 swipeRightSearch = o.optBoolean("swipeRightSearch", d.swipeRightSearch),
                 doubleTapLock = o.optBoolean("doubleTapLock", d.doubleTapLock),
+                gestureActions = o.optJSONObject("gestureActions")?.let { actions ->
+                    val defaults = defaultGestureActions()
+                    GestureTrigger.entries.forEach { trigger -> LauncherAction.fromJson(actions.optJSONObject(trigger.name))?.let { defaults[trigger] = it } }
+                    defaults
+                } ?: legacyGestureActions(o),
+                edgePills = o.optJSONArray("edgePills").objects().mapNotNull(EdgePill::fromJson).take(8).map { pill ->
+                    if (o.optInt("v", 1) >= 5) pill else pill.copy(
+                        verticalPosition = if (pill.name.equals("todo", true) || pill.name.equals("note", true)) 50 else pill.verticalPosition,
+                        visiblePercent = 70,
+                        widthDp = 88,
+                        tapAction = when {
+                            pill.name.equals("todo", true) -> LauncherAction(ActionType.TODO)
+                            pill.name.equals("note", true) -> LauncherAction(ActionType.NOTE)
+                            else -> pill.tapAction
+                        },
+                    )
+                },
+                todos = o.optJSONArray("todos").objects().mapNotNull(TodoItem::fromJson).take(100),
             )
         }
 
@@ -276,6 +377,25 @@ data class Settings(
 
         private fun JSONArray?.ints(): List<Int> =
             if (this == null) emptyList() else (0 until length()).map { optInt(it) }.filter { it > 0 }
+
+        private fun JSONArray?.objects(): List<JSONObject> =
+            if (this == null) emptyList() else (0 until length()).mapNotNull { optJSONObject(it) }
+
+        private fun defaultGestureActions() = mutableMapOf(
+            GestureTrigger.SWIPE_UP to LauncherAction(ActionType.APP_SEARCH),
+            GestureTrigger.SWIPE_DOWN to LauncherAction(ActionType.NOTIFICATIONS),
+            GestureTrigger.SWIPE_LEFT to LauncherAction(ActionType.APP_DRAWER),
+            GestureTrigger.SWIPE_RIGHT to LauncherAction(ActionType.WEB_SEARCH),
+            GestureTrigger.DOUBLE_TAP to LauncherAction(ActionType.LOCK_DEVICE),
+            GestureTrigger.LONG_PRESS to LauncherAction(ActionType.SETTINGS),
+        )
+
+        private fun legacyGestureActions(o: JSONObject) = defaultGestureActions().toMutableMap().apply {
+            if (!o.optBoolean("swipeUpSearch", true)) this[GestureTrigger.SWIPE_UP] = LauncherAction(ActionType.NONE)
+            if (!o.optBoolean("swipeDownNotifications", true)) this[GestureTrigger.SWIPE_DOWN] = LauncherAction(ActionType.NONE)
+            if (!o.optBoolean("swipeRightSearch", true)) this[GestureTrigger.SWIPE_RIGHT] = LauncherAction(ActionType.NONE)
+            if (!o.optBoolean("doubleTapLock", true)) this[GestureTrigger.DOUBLE_TAP] = LauncherAction(ActionType.NONE)
+        }
 
         private fun JSONObject?.stringMap(): Map<String, String> {
             if (this == null) return emptyMap()

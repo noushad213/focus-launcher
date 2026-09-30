@@ -10,7 +10,6 @@ import com.focus.launcher.ui.components.MenuRow
 import com.focus.launcher.ui.components.Hairline
 import com.focus.launcher.ui.components.TextInputDialog
 import android.Manifest
-import android.annotation.SuppressLint
 import android.content.Context
 import android.content.Intent
 import android.database.ContentObserver
@@ -20,7 +19,6 @@ import android.provider.AlarmClock
 import android.provider.CalendarContract
 import android.provider.MediaStore
 import android.text.format.DateFormat
-import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
@@ -44,9 +42,11 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
@@ -69,6 +69,9 @@ import com.focus.launcher.data.FontChoice
 import com.focus.launcher.data.SHORTCUT_CAMERA
 import com.focus.launcher.data.SHORTCUT_PHONE
 import com.focus.launcher.data.Settings
+import com.focus.launcher.data.GestureTrigger
+import com.focus.launcher.data.ActionType
+import com.focus.launcher.ui.executeAction
 import com.focus.launcher.data.SplitSide
 import com.focus.launcher.data.TAP_ALARMS
 import com.focus.launcher.data.TAP_BATTERY
@@ -76,7 +79,6 @@ import com.focus.launcher.data.TAP_CALENDAR
 import com.focus.launcher.data.TAP_NOTHING
 import com.focus.launcher.data.TAP_SCREEN_TIME
 import com.focus.launcher.data.TimeFormat
-import com.focus.launcher.service.FocusAccessibilityService
 import com.focus.launcher.ui.components.AppPickerDialog
 import com.focus.launcher.ui.components.ChoiceDialog
 import com.focus.launcher.ui.components.T
@@ -115,6 +117,7 @@ fun HomeScreen(
 ) {
     val c = LocalFocusColors.current
     val context = LocalContext.current
+    val actionScope = rememberCoroutineScope()
     val haptics = LocalHapticFeedback.current
     val now by rememberNow()
     // The gesture detectors below outlive recompositions, so they must call the latest callbacks.
@@ -165,6 +168,7 @@ fun HomeScreen(
         if (absent) Graph.state.nextTip()
     }
     var editingNote by remember { mutableStateOf(false) }
+    var readingNote by remember { mutableStateOf(false) }
     var choosingMusicApp by remember { mutableStateOf(false) }
     var choosingNoteApp by remember { mutableStateOf(false) }
     var noteMenu by remember { mutableStateOf(false) }
@@ -190,7 +194,8 @@ fun HomeScreen(
     BoxWithConstraints(
         Modifier
             .fillMaxSize()
-            .pointerInput(settings.swipeDownNotifications, settings.swipeUpSearch) {
+            .clipToBounds()
+            .pointerInput(settings.gestureActions, apps) {
                 val threshold = 64.dp.toPx()
                 var dragged = 0f
                 var fired = false
@@ -198,31 +203,30 @@ fun HomeScreen(
                     onDragStart = { dragged = 0f; fired = false },
                     onVerticalDrag = { _, dy ->
                         dragged += dy
-                        if (!fired && dragged > threshold && settings.swipeDownNotifications) {
+                        if (!fired && dragged > threshold && settings.gestureActions[GestureTrigger.SWIPE_DOWN]?.type != ActionType.NONE) {
                             fired = true
-                            expandNotifications(context)
+                            executeAction(context, actionScope, settings.gestureActions[GestureTrigger.SWIPE_DOWN]!!, apps, openDrawer)
                             Graph.state.did(Tip.SWIPE_DOWN)
-                        } else if (!fired && dragged < -threshold && settings.swipeUpSearch) {
+                        } else if (!fired && dragged < -threshold && settings.gestureActions[GestureTrigger.SWIPE_UP]?.type != ActionType.NONE) {
                             fired = true
-                            openDrawer(true)
+                            executeAction(context, actionScope, settings.gestureActions[GestureTrigger.SWIPE_UP]!!, apps, openDrawer)
                             Graph.state.did(Tip.SWIPE_UP)
                         }
                     },
                 )
             }
-            .pointerInput(settings.doubleTapLock) {
+            .pointerInput(settings.gestureActions, apps) {
                 detectTapGestures(
                     onLongPress = {
+                        val action = settings.gestureActions[GestureTrigger.LONG_PRESS] ?: com.focus.launcher.data.LauncherAction(ActionType.SETTINGS)
                         haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                        Graph.state.did(Tip.SETTINGS)
-                        openSettings(null)
+                        if (action.type == ActionType.SETTINGS) Graph.state.did(Tip.SETTINGS)
+                        executeAction(context, actionScope, action, apps, openDrawer)
                     },
-                    onDoubleTap = if (settings.doubleTapLock) {
+                    onDoubleTap = if (settings.gestureActions[GestureTrigger.DOUBLE_TAP]?.type != ActionType.NONE) {
                         {
                             Graph.state.did(Tip.DOUBLE_TAP)
-                            if (!FocusAccessibilityService.lockScreen()) {
-                                Toast.makeText(context, "Turn on the Focus timer service to lock with a double tap", Toast.LENGTH_SHORT).show()
-                            }
+                            executeAction(context, actionScope, settings.gestureActions[GestureTrigger.DOUBLE_TAP]!!, apps, openDrawer)
                         }
                     } else null,
                 )
@@ -404,7 +408,7 @@ fun HomeScreen(
                     note = settings.note,
                     appLabel = noteApp?.label,
                     maxLines = fit.maxEvents,
-                    onEdit = { editingNote = true },
+                    onRead = { readingNote = true },
                     // One page of the app, if a link to it was given; the app itself otherwise.
                     onOpenApp = { noteApp?.let { app -> if (settings.noteLink.isBlank() || !openLink(context, settings.noteLink, app.packageName)) onLaunch(app) } },
                     onLongClick = { Graph.state.did(Tip.SECTION_APPS); noteMenu = true },
@@ -466,6 +470,25 @@ fun HomeScreen(
             }
             VSpace(6.dp)
         }
+        EdgePills(
+        pills = settings.edgePills,
+        label = { pill ->
+            if (pill.tapAction.type == com.focus.launcher.data.ActionType.TODO || pill.name.equals("todo", true)) {
+                val count = settings.todos.count { !it.done }
+                if (count == 0) pill.name else "${pill.name} $count"
+            } else pill.name
+        },
+        onTap = { pill ->
+            val action = when {
+                pill.name.equals("todo", true) -> com.focus.launcher.data.LauncherAction(com.focus.launcher.data.ActionType.TODO)
+                pill.name.equals("note", true) -> com.focus.launcher.data.LauncherAction(com.focus.launcher.data.ActionType.NOTE)
+                else -> pill.tapAction
+            }
+            executeAction(context, actionScope, action, apps, onOpenDrawer)
+        },
+        onLongPress = { pill -> executeAction(context, actionScope, pill.longPressAction, apps, onOpenDrawer) },
+        onSwipeIn = { executeAction(context, actionScope, it.inwardSwipeAction, apps, onOpenDrawer) },
+        )
     }
 
     if (choosingClockTap) ClockTapDialog(settings, apps) { choosingClockTap = false }
@@ -517,6 +540,17 @@ fun HomeScreen(
         ) { link -> Graph.settings.update { it.copy(noteLink = link) } }
     }
 
+    if (readingNote) {
+        NoteReadDialog(
+            note = settings.note,
+            onDismiss = { readingNote = false },
+            onEdit = {
+                readingNote = false
+                editingNote = true
+            },
+        )
+    }
+
     if (editingNote) {
         TextInputDialog(
             title = "Note",
@@ -554,7 +588,6 @@ fun HomeScreen(
         )
     }
 }
-
 /**
  * A tip, framed so that it cannot be mistaken for part of the home screen: the gesture in full brightness, what it does next to it, quieter. Short enough for one
  * line; if a large text size makes it longer it wraps, it is never cut off. A tap skips it.
@@ -672,16 +705,5 @@ private fun performClockTap(
         )
         TAP_NOTHING -> Unit
         else -> apps.firstOrNull { it.key == spec }?.let(onLaunch)
-    }
-}
-
-/** Pulls the notification shade down: via the timer service when it is on, else the status-bar service. */
-@SuppressLint("WrongConstant", "PrivateApi")
-private fun expandNotifications(context: Context) {
-    if (FocusAccessibilityService.openNotifications()) return
-    try {
-        val statusBar = context.getSystemService("statusbar")
-        Class.forName("android.app.StatusBarManager").getMethod("expandNotificationsPanel").invoke(statusBar)
-    } catch (_: Exception) {
     }
 }

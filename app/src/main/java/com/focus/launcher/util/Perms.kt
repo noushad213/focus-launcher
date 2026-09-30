@@ -1,6 +1,7 @@
 package com.focus.launcher.util
 
 import android.Manifest
+import android.app.Activity
 import android.app.NotificationManager
 import android.content.ComponentName
 import android.content.Context
@@ -44,9 +45,11 @@ object Perms {
 
     fun openUsageAccess(context: Context) = start(
         context,
-        // Some phones jump straight to this app's switch when given the package, others reject it.
-        Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS, "package:${context.packageName}".toUri()),
+        // The general list is reliable across OEM Settings apps. Several phones accept the
+        // package deep link and then immediately close it without showing a switch.
         Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS),
+        Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS, "package:${context.packageName}".toUri()),
+        Intent(Settings.ACTION_SETTINGS),
     )
 
     fun openAccessibility(context: Context) = start(context, Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
@@ -73,7 +76,8 @@ object Perms {
     fun start(context: Context, vararg candidates: Intent, options: Bundle? = null): Boolean {
         for (intent in candidates) {
             try {
-                context.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK), options)
+                if (context !is Activity) intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                context.startActivity(intent, options)
                 return true
             } catch (_: Exception) {
             }

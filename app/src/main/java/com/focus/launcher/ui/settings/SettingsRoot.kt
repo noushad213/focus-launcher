@@ -45,6 +45,8 @@ import com.focus.launcher.ui.components.SettingRow
 import com.focus.launcher.ui.components.T
 import com.focus.launcher.ui.components.VSpace
 import com.focus.launcher.ui.theme.LocalFocusColors
+import com.focus.launcher.ui.settings.GesturesPage
+import com.focus.launcher.ui.settings.PillsPage
 import com.focus.launcher.util.Perms
 
 /** Snapshot of the system switches Focus depends on; re-read whenever settings come back on screen. */
@@ -82,6 +84,7 @@ object Routes {
     const val WEEKLY = "weekly"
     const val APPEARANCE = "appearance"
     const val GESTURES = "gestures"
+    const val PILLS = "pills"
     const val ABOUT = "about"
     const val WELCOME = "welcome"
 }
@@ -133,6 +136,7 @@ fun SettingsRoot(settings: Settings, startRoute: String?, onExit: () -> Unit) {
             Routes.WEEKLY -> WeeklyPage(settings, status, back, go)
             Routes.APPEARANCE -> AppearancePage(settings, back)
             Routes.GESTURES -> GesturesPage(settings, status, back, go)
+            Routes.PILLS -> PillsPage(settings, apps, back)
             Routes.ABOUT -> AboutPage(back, go)
             Routes.WELCOME -> WelcomePage { toSetup ->
                 Graph.state.tutorialSeen = true
@@ -159,6 +163,7 @@ private fun MainPage(settings: Settings, appCount: Int, status: SetupStatus, onB
         SettingRow("Home screen", subtitle = "Clock, sections, fast apps, corner shortcuts", onClick = { go(Routes.HOME) })
         SettingRow("App drawer", subtitle = "Keyboard, search, recently installed, hidden apps", value = "$appCount apps", onClick = { go(Routes.DRAWER) })
         SettingRow("Gestures", subtitle = "Swipes, double tap, keyboard in the drawer", onClick = { go(Routes.GESTURES) })
+        SettingRow("Pills", subtitle = "Edge tabs and their actions", value = "${settings.edgePills.size}", onClick = { go(Routes.PILLS) })
         SettingRow("Appearance", subtitle = "Black or white, typeface, text size", onClick = { go(Routes.APPEARANCE) })
         Section("Focus")
         SettingRow(
@@ -251,3 +256,6 @@ internal fun Note(text: String, onClick: (() -> Unit)? = null) {
         size = 13.sp, color = LocalFocusColors.current.dim, lineHeight = 19.sp,
     )
 }
+
+
+

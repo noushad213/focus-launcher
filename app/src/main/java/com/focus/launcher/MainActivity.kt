@@ -34,12 +34,16 @@ import androidx.lifecycle.compose.LifecycleStartEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.focus.launcher.data.AppEntry
 import com.focus.launcher.data.Settings
+import com.focus.launcher.data.ActionType
+import com.focus.launcher.data.GestureTrigger
+import com.focus.launcher.data.LauncherAction
+import com.focus.launcher.data.PillEdge
 import com.focus.launcher.service.WeeklyReview
 import com.focus.launcher.ui.drawer.AppMenu
 import com.focus.launcher.ui.drawer.DrawerScreen
 import com.focus.launcher.ui.home.HomeScreen
 import com.focus.launcher.ui.launchApp
-import com.focus.launcher.ui.openWebSearch
+import com.focus.launcher.ui.executeAction
 import com.focus.launcher.ui.theme.FocusTheme
 import com.focus.launcher.ui.theme.applyFocusWindow
 import com.focus.launcher.util.Perms
@@ -153,25 +157,41 @@ private fun Launcher(settings: Settings, homePresses: Flow<Unit>) {
     }
 
     val launch: (AppEntry) -> Unit = { entry -> launchApp(context, scope, entry) }
+    val leftAction = settings.gestureActions[GestureTrigger.SWIPE_LEFT] ?: LauncherAction(ActionType.APP_DRAWER)
+    val rightAction = settings.gestureActions[GestureTrigger.SWIPE_RIGHT] ?: LauncherAction(ActionType.WEB_SEARCH)
+    val openDrawer: (Boolean) -> Unit = { focus ->
+        wantsSearchFocus = focus
+        scope.launch { pager.animateScrollToPage(1) }
+    }
 
     HorizontalPager(
         state = pager,
-        // There is no page to the left of home, so the pager ignores that swipe. Watch it on the
-        // way down (Initial pass, nothing consumed) and open the web search instead, the way the
-        // page left of a stock home screen does.
-        modifier = Modifier.fillMaxSize().pointerInput(settings.swipeRightSearch) {
-            if (!settings.swipeRightSearch) return@pointerInput
+        userScrollEnabled = pager.currentPage == 1 || leftAction.type == ActionType.APP_DRAWER,
+        modifier = Modifier.fillMaxSize().pointerInput(leftAction, rightAction, settings.edgePills, apps) {
             val threshold = 72.dp.toPx()
             awaitEachGesture {
                 val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
                 if (pager.currentPage != 0 || pager.isScrollInProgress) return@awaitEachGesture
+                val onPill = settings.edgePills.any { pill ->
+                    if (!pill.enabled) false else {
+                        val visible = (pill.widthDp * pill.visiblePercent / 100f).dp.toPx()
+                        val nearEdge = if (pill.edge == PillEdge.LEFT) down.position.x <= visible else down.position.x >= size.width - visible
+                        val centerY = size.height * pill.verticalPosition / 100f
+                        nearEdge && abs(down.position.y - centerY) <= 40.dp.toPx()
+                    }
+                }
+                if (onPill) return@awaitEachGesture
                 while (true) {
                     val change = awaitPointerEvent(PointerEventPass.Initial).changes.firstOrNull { it.id == down.id } ?: break
                     if (!change.pressed) break
                     val moved = change.position - down.position
                     if (moved.x > threshold && moved.x > abs(moved.y) * 2) {
-                        openWebSearch(context)
-                        Graph.state.did(Tip.SWIPE_RIGHT)
+                        executeAction(context, scope, rightAction, apps, openDrawer)
+                        if (rightAction.type != ActionType.NONE) Graph.state.did(Tip.SWIPE_RIGHT)
+                        break
+                    }
+                    if (moved.x < -threshold && -moved.x > abs(moved.y) * 2 && leftAction.type != ActionType.APP_DRAWER) {
+                        executeAction(context, scope, leftAction, apps, openDrawer)
                         break
                     }
                 }

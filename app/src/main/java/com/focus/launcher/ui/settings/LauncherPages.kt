@@ -5,10 +5,13 @@ import android.Manifest
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -39,6 +42,8 @@ import com.focus.launcher.data.SplitSide
 import com.focus.launcher.data.TimeFormat
 import com.focus.launcher.ui.components.AppPickerDialog
 import com.focus.launcher.ui.components.ChoiceDialog
+import com.focus.launcher.ui.components.FocusDialog
+import com.focus.launcher.ui.components.MenuRow
 import com.focus.launcher.ui.components.FocusDialog
 import com.focus.launcher.ui.components.MenuRow
 import com.focus.launcher.ui.components.SettingRow
@@ -351,18 +356,3 @@ internal fun AppearancePage(settings: Settings, onBack: () -> Unit) {
 
 // ---- Gestures --------------------------------------------------------------------------------
 
-@Composable
-internal fun GesturesPage(settings: Settings, status: SetupStatus, onBack: () -> Unit, go: (String) -> Unit) {
-    Page("Gestures", onBack) {
-        Note("Swiping left always opens the app drawer, and a long-press on empty space opens these settings.")
-        ToggleRow("Swipe down for notifications", settings.swipeDownNotifications) { v -> update { it.copy(swipeDownNotifications = v) } }
-        ToggleRow("Swipe up to search", settings.swipeUpSearch, subtitle = "Jumps to the drawer with the keyboard open.") { v -> update { it.copy(swipeUpSearch = v) } }
-        // Also under App drawer. It is looked for here too: it is what swiping to the drawer does.
-        ToggleRow("Keyboard opens with the drawer", settings.autoKeyboard, subtitle = "Start typing the moment you swipe to your apps.") { v -> update { it.copy(autoKeyboard = v) } }
-        ToggleRow("Swipe right for web search", settings.swipeRightSearch, subtitle = "Opens the Google search box, like the page left of a stock home screen.") { v -> update { it.copy(swipeRightSearch = v) } }
-        ToggleRow("Double tap to lock", settings.doubleTapLock, subtitle = "Turns the screen off. Uses the Focus timer service.") { v -> update { it.copy(doubleTapLock = v) } }
-        if (settings.doubleTapLock && !status.timerService) {
-            Note("The Focus timer service is off, so double tap cannot lock yet.  Open setup  →") { go(Routes.SETUP) }
-        }
-    }
-}

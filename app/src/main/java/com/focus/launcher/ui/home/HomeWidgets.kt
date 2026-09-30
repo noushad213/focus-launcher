@@ -55,10 +55,14 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
@@ -81,6 +85,8 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -150,6 +156,25 @@ fun HomeAlign.text(): TextAlign = when (this) {
 private val DATE_LONG = DateTimeFormatter.ofPattern("EEEE, d MMMM")
 private val DATE_SHORT = DateTimeFormatter.ofPattern("EEE, d MMM")
 
+private data class ClockText(val time: String, val amPm: String?)
+
+@Composable
+private fun rememberClockText(now: LocalDateTime, format: TimeFormat): ClockText {
+    val context = LocalContext.current
+    val locale = currentLocale()
+    val use24h = when (format) {
+        TimeFormat.SYSTEM -> DateFormat.is24HourFormat(context)
+        TimeFormat.H24 -> true
+        TimeFormat.H12 -> false
+    }
+    return remember(now, format, use24h, locale) {
+        ClockText(
+            time = now.format(DateTimeFormatter.ofPattern(if (use24h) "HH:mm" else "h:mm", locale)),
+            amPm = if (use24h) null else now.format(DateTimeFormatter.ofPattern("a", locale)).uppercase(locale),
+        )
+    }
+}
+
 data class BatteryState(val percent: Int, val charging: Boolean)
 
 private fun readBattery(context: Context, update: Intent?): BatteryState {
@@ -204,15 +229,7 @@ fun HomeClock(
     modifier: Modifier = Modifier,
 ) {
     val c = LocalFocusColors.current
-    val context = LocalContext.current
-    val locale = currentLocale()
-    val use24h = when (settings.timeFormat) {
-        TimeFormat.SYSTEM -> DateFormat.is24HourFormat(context)
-        TimeFormat.H24 -> true
-        TimeFormat.H12 -> false
-    }
-    val time = now.format(DateTimeFormatter.ofPattern(if (use24h) "HH:mm" else "h:mm"))
-    val amPm = if (use24h) null else now.format(DateTimeFormatter.ofPattern("a", locale)).uppercase()
+    val (time, amPm) = rememberClockText(now, settings.timeFormat)
 
     val showBattery = settings.ringMode == RingMode.BATTERY
     val battery by rememberBattery()
@@ -303,15 +320,7 @@ fun SplitClockRow(
     side: @Composable () -> Unit,
 ) {
     val c = LocalFocusColors.current
-    val context = LocalContext.current
-    val locale = currentLocale()
-    val use24h = when (settings.timeFormat) {
-        TimeFormat.SYSTEM -> DateFormat.is24HourFormat(context)
-        TimeFormat.H24 -> true
-        TimeFormat.H12 -> false
-    }
-    val time = now.format(DateTimeFormatter.ofPattern(if (use24h) "HH:mm" else "h:mm"))
-    val amPm = if (use24h) null else now.format(DateTimeFormatter.ofPattern("a", locale)).uppercase()
+    val (time, amPm) = rememberClockText(now, settings.timeFormat)
     val showBattery = settings.ringMode == RingMode.BATTERY
     val battery by rememberBattery()
 
@@ -716,24 +725,73 @@ internal fun MusicSection(state: MusicState, onOpenDefault: () -> Unit, onChoose
 }
 
 /**
- * A few lines of your own, kept by Focus and always in sight: a tap edits them then and there.
+ * A few lines of your own, kept by Focus and always in sight: a tap opens the full note to read.
  * The notes app, if one was chosen, is the word at the right of the title ([appLabel], [onOpenApp]):
  * what it holds lives on its own servers, so Focus cannot show it, only open it. A long-press
  * anywhere offers the settings of the section.
  */
 @Composable
-fun NoteSection(note: String, appLabel: String?, maxLines: Int, onEdit: () -> Unit, onOpenApp: () -> Unit, onLongClick: () -> Unit, modifier: Modifier = Modifier) {
+fun NoteSection(note: String, appLabel: String?, maxLines: Int, onRead: () -> Unit, onOpenApp: () -> Unit, onLongClick: () -> Unit, modifier: Modifier = Modifier) {
     val c = LocalFocusColors.current
-    Column(modifier.fillMaxWidth().press(onLongClick = onLongClick, onClick = onEdit).padding(horizontal = 12.dp)) {
+    Column(modifier.fillMaxWidth().press(onLongClick = onLongClick, onClick = onRead).padding(horizontal = 12.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Label("Note", Modifier.weight(1f).padding(vertical = 10.dp), color = c.fg)
             if (appLabel != null) {
                 T("$appLabel  →", Modifier.press(onLongClick = onLongClick, onClick = onOpenApp).padding(start = 14.dp, top = 10.dp, bottom = 10.dp), size = 13.sp, color = c.dim, maxLines = 1)
             }
         }
-        if (note.isBlank()) T("Tap to write a note", size = 14.sp, color = c.dim, maxLines = 1)
+        if (note.isBlank()) T("Tap to open note", size = 14.sp, color = c.dim, maxLines = 1)
         else T(note, if (hasColourGlyphs(note)) Modifier.monochrome() else Modifier, size = 14.sp, color = c.dim, maxLines = maxLines, lineHeight = 20.sp)
         VSpace(8.dp)
+    }
+}
+
+/** Read-only note view. It grows with the note, then scrolls at the screen limit. */
+@Composable
+fun NoteReadDialog(note: String, onDismiss: () -> Unit, onEdit: () -> Unit) {
+    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+        val c = LocalFocusColors.current
+        val maxHeight = (LocalConfiguration.current.screenHeightDp - 32).coerceAtLeast(240).dp
+        Column(
+            Modifier
+                .widthIn(max = 460.dp)
+                .fillMaxWidth(0.94f)
+                .heightIn(max = maxHeight)
+                .background(c.bg)
+                .border(1.dp, c.faint)
+                .padding(bottom = 18.dp),
+        ) {
+            Row(
+                Modifier.fillMaxWidth().padding(start = 24.dp, end = 12.dp, top = 10.dp, bottom = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                T("Note", Modifier.weight(1f), size = 20.sp, weight = FontWeight.Medium)
+                T(
+                    "✎",
+                    Modifier
+                        .semantics { contentDescription = "Edit note" }
+                        .clickable(onClick = onEdit)
+                        .padding(horizontal = 12.dp, vertical = 10.dp),
+                    size = 21.sp,
+                )
+            }
+            Box(
+                Modifier
+                    .weight(1f, fill = false)
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 24.dp, vertical = 12.dp),
+            ) {
+                val shown = note.ifBlank { "Nothing here yet." }
+                T(
+                    shown,
+                    modifier = if (hasColourGlyphs(shown)) Modifier.monochrome() else Modifier,
+                    size = 18.sp,
+                    color = if (note.isBlank()) c.dim else c.fg,
+                    lineHeight = 27.sp,
+                )
+            }
+        }
     }
 }
 

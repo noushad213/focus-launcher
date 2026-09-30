@@ -190,12 +190,15 @@ fun TextInputDialog(
         onConfirm(value.text.trim())
         onDismiss()
     }
-    FocusDialog(onDismiss, title, subtitle) {
+    FocusDialog(onDismiss, title, subtitle, tall = multiline) {
         UnderlinedField(
             value = value,
             onValueChange = { next -> value = if (numeric) next.copy(text = next.text.filter(Char::isDigit).take(4)) else next },
             placeholder = placeholder,
-            modifier = Modifier.padding(horizontal = 24.dp, vertical = 18.dp).focusRequester(focus),
+            modifier = Modifier
+                .then(if (multiline) Modifier.weight(1f) else Modifier)
+                .padding(horizontal = 24.dp, vertical = 18.dp)
+                .focusRequester(focus),
             imeAction = if (multiline) ImeAction.Default else ImeAction.Done,
             keyboardType = if (numeric) KeyboardType.Number else KeyboardType.Text,
             onImeAction = submit,
@@ -224,7 +227,7 @@ fun UnderlinedField(
         onValueChange = onValueChange,
         modifier = modifier.fillMaxWidth(),
         singleLine = singleLine,
-        maxLines = if (singleLine) 1 else 6,
+        maxLines = if (singleLine) 1 else Int.MAX_VALUE,
         textStyle = focusTextStyle(size = 19.sp),
         cursorBrush = SolidColor(c.fg),
         keyboardOptions = KeyboardOptions(
