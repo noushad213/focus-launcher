@@ -45,7 +45,7 @@ enum class ActionType(val label: String) {
     NONE("Nothing"), OPEN_APP("Open app"), APP_DRAWER("App drawer"), APP_SEARCH("Search apps"),
     NOTIFICATIONS("Notifications"), WEB_SEARCH("Web search"), OPEN_URL("Open URL"),
     LOCK_DEVICE("Lock device"), ALARMS("Alarms"), SELECTED_BROWSER("Open browser"), SETTINGS("Settings"), PILLS("Pill settings"),
-    TODO("Todo"), NOTE("Note"), FOCUS_SETUP("Focus setup"),
+    TODO("Todo"), NOTE("Note"), FOCUS_SETUP("Focus setup"), FOCUS_SESSION("Focus"),
 }
 
 data class TodoItem(val id: String, val text: String, val done: Boolean = false) {
@@ -207,7 +207,7 @@ data class Settings(
     val swipeRightSearch: Boolean = true,
     val doubleTapLock: Boolean = true,
     val gestureActions: Map<GestureTrigger, LauncherAction> = defaultGestureActions(),
-    val edgePills: List<EdgePill> = emptyList(),
+    val edgePills: List<EdgePill> = listOf(focusPill()),
     val todos: List<TodoItem> = emptyList(),
 ) {
     fun toJson(): JSONObject = JSONObject().apply {
@@ -276,7 +276,14 @@ data class Settings(
     companion object {
         /** Tolerant of missing keys, so older saved settings survive app updates. */
         /** Version of the stored settings. Bump it only when an old stored value has to be reinterpreted. */
-        const val SCHEMA = 5
+        const val SCHEMA = 6
+
+        private fun focusPill() = EdgePill(
+            id = "builtin-focus",
+            name = "Focus",
+            tapAction = LauncherAction(ActionType.FOCUS_SESSION),
+            inwardSwipeAction = LauncherAction(ActionType.FOCUS_SESSION),
+        )
 
         fun fromJson(o: JSONObject): Settings {
             val d = Settings()
@@ -364,6 +371,13 @@ data class Settings(
                             else -> pill.tapAction
                         },
                     )
+                }.map { pill ->
+                    if (o.optInt("v", 1) < 6 && pill.name.equals("focus", true) && pill.tapAction.type == ActionType.FOCUS_SETUP)
+                        pill.copy(tapAction = LauncherAction(ActionType.FOCUS_SESSION), inwardSwipeAction = LauncherAction(ActionType.FOCUS_SESSION))
+                    else pill
+                }.let { pills ->
+                    if (o.optInt("v", 1) < 6 && pills.size < 8 && pills.none { it.tapAction.type == ActionType.FOCUS_SESSION || it.id == "builtin-focus" })
+                        pills + focusPill().copy(verticalPosition = 78) else pills
                 },
                 todos = o.optJSONArray("todos").objects().mapNotNull(TodoItem::fromJson).take(100),
             )

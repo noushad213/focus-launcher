@@ -73,6 +73,10 @@
             android:exported="false"
             android:windowSoftInputMode="adjustResize" />
 
+        <activity
+            android:name=".FocusSessionActivity"
+            android:exported="false" />
+
         <!-- Full-screen "time's up" wall. Lives in its own task so it can sit on top of the limited app. -->
         <activity
             android:name=".BlockActivity"

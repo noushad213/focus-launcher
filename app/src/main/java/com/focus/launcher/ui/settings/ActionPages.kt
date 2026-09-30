@@ -149,7 +149,7 @@ internal fun PillsPage(settings: Settings, apps: List<AppEntry>, onBack: () -> U
         MenuRow("Note", onClick = { addPreset("Note", ActionType.NOTE) })
         MenuRow("Apps", onClick = { addPreset("Apps", ActionType.APP_DRAWER) })
         MenuRow("Search", onClick = { addPreset("Search", ActionType.APP_SEARCH) })
-        MenuRow("Focus", onClick = { addPreset("Focus", ActionType.FOCUS_SETUP) })
+        MenuRow("Focus", onClick = { addPreset("Focus", ActionType.FOCUS_SESSION) })
         MenuRow("Custom…", onClick = { adding = false; namingCustom = true })
     }
     if (namingCustom) TextInputDialog("Custom pill", "", "Name", { namingCustom = false }) { name ->

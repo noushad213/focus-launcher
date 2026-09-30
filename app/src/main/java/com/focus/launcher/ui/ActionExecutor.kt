@@ -6,6 +6,7 @@ import android.provider.AlarmClock
 import android.widget.Toast
 import com.focus.launcher.SettingsActivity
 import com.focus.launcher.ToolActivity
+import com.focus.launcher.FocusSessionActivity
 import com.focus.launcher.ui.settings.Routes
 import androidx.core.net.toUri
 import com.focus.launcher.data.ActionType
@@ -34,6 +35,7 @@ fun executeAction(
         ActionType.TODO -> context.startActivity(ToolActivity.intent(context, ToolActivity.TODO))
         ActionType.NOTE -> context.startActivity(ToolActivity.intent(context, ToolActivity.NOTE))
         ActionType.FOCUS_SETUP -> context.startActivity(SettingsActivity.intent(context, Routes.SETUP))
+        ActionType.FOCUS_SESSION -> context.startActivity(Intent(context, FocusSessionActivity::class.java))
         ActionType.NOTIFICATIONS -> if (!FocusAccessibilityService.openNotifications()) {
             try {
                 @Suppress("PrivateApi", "WrongConstant")
