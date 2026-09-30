@@ -59,7 +59,9 @@ private fun update(transform: (Settings) -> Settings) = Graph.settings.update(tr
 
 // ---- Home screen -----------------------------------------------------------------------------
 
-private enum class HomeDialog { NONE, CLOCK, SPLIT_SIDE, RING, TAP, TIME_FORMAT, ALIGN, LEFT, RIGHT, CALENDAR, MUSIC_APP, NOTE_APP }
+private enum class HomeDialog { NONE, CLOCK, SPLIT_SIDE, RING, TAP, TIME_FORMAT, ALIGN, LEFT, RIGHT, CALENDAR, MUSIC_APP, NOTE_APP, IDLE_LOCK }
+
+private val IDLE_LOCK_CHOICES = listOf(0 to "Off", 30 to "30 seconds", 60 to "1 minute", 120 to "2 minutes", 300 to "5 minutes")
 
 @Composable
 internal fun HomePage(settings: Settings, apps: List<AppEntry>, onBack: () -> Unit, go: (String) -> Unit) {
@@ -179,6 +181,14 @@ internal fun HomePage(settings: Settings, apps: List<AppEntry>, onBack: () -> Un
         ToggleRow("Show shortcuts", settings.showShortcuts) { v -> update { it.copy(showShortcuts = v) } }
         SettingRow("Bottom left", value = shortcutLabel(settings.leftShortcut, apps), enabled = settings.showShortcuts, onClick = { dialog = HomeDialog.LEFT })
         SettingRow("Bottom right", value = shortcutLabel(settings.rightShortcut, apps), enabled = settings.showShortcuts, onClick = { dialog = HomeDialog.RIGHT })
+
+        Section("Screen lock")
+        SettingRow(
+            "Lock when idle on home",
+            subtitle = "Locks after no interaction on the home screen. The phone shows its own always on display if enabled. Requires the Focus timer service.",
+            value = IDLE_LOCK_CHOICES.first { it.first == settings.homeIdleLockSeconds }.second,
+            onClick = { dialog = HomeDialog.IDLE_LOCK },
+        )
     }
 
     when (dialog) {
@@ -218,6 +228,9 @@ internal fun HomePage(settings: Settings, apps: List<AppEntry>, onBack: () -> Un
             leading = listOf("None" to { update { it.copy(noteApp = "", noteLink = "") } }),
             onPick = { app -> update { it.copy(noteApp = app.key, noteLink = "") } },
         )
+        HomeDialog.IDLE_LOCK -> ChoiceDialog("Lock when idle on home", IDLE_LOCK_CHOICES, settings.homeIdleLockSeconds, close) { v ->
+            update { it.copy(homeIdleLockSeconds = v) }
+        }
         HomeDialog.LEFT, HomeDialog.RIGHT -> {
             val left = dialog == HomeDialog.LEFT
             val set: (String) -> Unit = { spec -> update { if (left) it.copy(leftShortcut = spec) else it.copy(rightShortcut = spec) } }

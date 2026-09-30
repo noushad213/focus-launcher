@@ -163,6 +163,8 @@ data class Settings(
     val homeAlign: HomeAlign = HomeAlign.CENTER,
     val favorites: List<String> = emptyList(),
     val showShortcuts: Boolean = true,
+    /** Seconds of inactivity on the home page before locking. 0 follows the phone's timeout. */
+    val homeIdleLockSeconds: Int = 0,
     val leftShortcut: String = SHORTCUT_PHONE,
     val rightShortcut: String = SHORTCUT_CAMERA,
 
@@ -237,6 +239,7 @@ data class Settings(
         put("homeAlign", homeAlign.name)
         put("favorites", JSONArray(favorites))
         put("showShortcuts", showShortcuts)
+        put("homeIdleLockSeconds", homeIdleLockSeconds)
         put("leftShortcut", leftShortcut)
         put("rightShortcut", rightShortcut)
 
@@ -324,6 +327,7 @@ data class Settings(
                 homeAlign = enumOr(o.optString("homeAlign"), d.homeAlign),
                 favorites = o.optJSONArray("favorites").strings().take(MAX_FAVORITES),
                 showShortcuts = o.optBoolean("showShortcuts", d.showShortcuts),
+                homeIdleLockSeconds = o.optInt("homeIdleLockSeconds", 0).takeIf { it in setOf(0, 30, 60, 120, 300) } ?: 0,
                 leftShortcut = o.optString("leftShortcut", d.leftShortcut),
                 rightShortcut = o.optString("rightShortcut", d.rightShortcut),
 

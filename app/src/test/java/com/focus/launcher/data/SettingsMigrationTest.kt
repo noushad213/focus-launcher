@@ -40,6 +40,12 @@ class SettingsMigrationTest {
         assertEquals(s, Settings.fromJson(s.toJson()))
     }
 
+    @Test fun `home idle lock is optional and survives a round trip`() {
+        assertEquals(0, Settings.fromJson(JSONObject()).homeIdleLockSeconds)
+        assertEquals(120, Settings.fromJson(Settings(homeIdleLockSeconds = 120).toJson()).homeIdleLockSeconds)
+        assertEquals(0, Settings.fromJson(JSONObject().put("homeIdleLockSeconds", -1)).homeIdleLockSeconds)
+    }
+
     @Test fun `an install from before the music section could hide gets the hiding`() {
         val old = Settings(showMusic = true).toJson().apply { remove("musicAutoHide") }
         assertEquals(true, Settings.fromJson(old).musicAutoHide)

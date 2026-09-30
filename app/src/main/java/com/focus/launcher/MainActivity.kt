@@ -3,6 +3,8 @@ package com.focus.launcher
 import com.focus.launcher.data.Tip
 import android.content.Intent
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
@@ -39,6 +41,7 @@ import com.focus.launcher.data.GestureTrigger
 import com.focus.launcher.data.LauncherAction
 import com.focus.launcher.data.PillEdge
 import com.focus.launcher.service.WeeklyReview
+import com.focus.launcher.service.FocusAccessibilityService
 import com.focus.launcher.ui.drawer.AppMenu
 import com.focus.launcher.ui.drawer.DrawerScreen
 import com.focus.launcher.ui.home.HomeScreen
@@ -57,6 +60,44 @@ import kotlinx.coroutines.launch
 /** The home screen (page 0) and, one swipe to the left, the app drawer (page 1). */
 class MainActivity : ComponentActivity() {
     private val homePresses = MutableSharedFlow<Unit>(extraBufferCapacity = 4)
+    private val idleHandler = Handler(Looper.getMainLooper())
+    private var idleLockSeconds = 0
+    private var homeVisible = false
+    private var resumed = false
+    private val idleLock = Runnable {
+        if (resumed && homeVisible && idleLockSeconds > 0) FocusAccessibilityService.lockScreen()
+    }
+
+    private fun resetIdleLock() {
+        idleHandler.removeCallbacks(idleLock)
+        if (resumed && homeVisible && idleLockSeconds > 0 && FocusAccessibilityService.isRunning) {
+            idleHandler.postDelayed(idleLock, idleLockSeconds * 1000L)
+        }
+    }
+
+    fun configureIdleLock(seconds: Int, onHome: Boolean) {
+        if (seconds == idleLockSeconds && onHome == homeVisible) return
+        idleLockSeconds = seconds
+        homeVisible = onHome
+        resetIdleLock()
+    }
+
+    override fun onUserInteraction() {
+        super.onUserInteraction()
+        resetIdleLock()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        resumed = true
+        resetIdleLock()
+    }
+
+    override fun onPause() {
+        resumed = false
+        idleHandler.removeCallbacks(idleLock)
+        super.onPause()
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -103,6 +144,12 @@ private fun Launcher(settings: Settings, homePresses: Flow<Unit>) {
     val drawerActive by remember { derivedStateOf { if (pagerDragged) pager.settledPage == 1 else pager.targetPage == 1 } }
     var query by remember { mutableStateOf("") }
     var menuApp by remember { mutableStateOf<AppEntry?>(null) }
+    LaunchedEffect(settings.homeIdleLockSeconds, pager.currentPage, pager.isScrollInProgress, menuApp) {
+        (context as MainActivity).configureIdleLock(
+            settings.homeIdleLockSeconds,
+            pager.currentPage == 0 && !pager.isScrollInProgress && menuApp == null,
+        )
+    }
     var wantsSearchFocus by remember { mutableStateOf(false) }
     var resumeCount by remember { mutableIntStateOf(0) }
     var usageAccess by remember { mutableStateOf(Perms.hasUsageAccess()) }
