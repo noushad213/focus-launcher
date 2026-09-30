@@ -2,6 +2,7 @@ package com.focus.launcher
 
 import android.content.Context
 import android.os.Bundle
+import android.os.Build
 import android.os.PowerManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
@@ -52,14 +53,16 @@ class FocusSessionActivity : ComponentActivity() {
     private var confirming by mutableStateOf(false)
     private var exitAfterStop by mutableStateOf(false)
     private var revision by mutableStateOf(0)
+    private var originalBrightness = android.view.WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        originalBrightness = window.attributes.screenBrightness
         active = sessions.activeStart != null
         setContent {
             val settings by Graph.settings.flow.collectAsStateWithLifecycle()
-            LaunchedEffect(settings.dark) { applyFocusWindow(settings.dark) }
-            FocusTheme(settings) {
+            LaunchedEffect(settings.dark, active) { updateFocusDisplay(settings.dark) }
+            FocusTheme(if (active) settings.copy(dark = true) else settings) {
                 FocusSessionScreen(active, sessions, revision, ::start, ::stop, ::askToStop, ::askToLeave, ::finish, confirming, exitAfterStop) {
                     confirming = false
                 }
@@ -67,10 +70,29 @@ class FocusSessionActivity : ComponentActivity() {
         }
     }
 
-    private fun start() { sessions.start(); active = true }
-    private fun stop() { sessions.stop(); active = false; revision++ }
+    private fun start() { sessions.start(); active = true; updateFocusDisplay(true) }
+    private fun stop() { sessions.stop(); active = false; revision++; updateFocusDisplay(Graph.settings.value.dark) }
     private fun askToStop() { exitAfterStop = false; confirming = true }
     private fun askToLeave() { if (active) { exitAfterStop = true; confirming = true } else finish() }
+
+    private fun updateFocusDisplay(preferredDark: Boolean) {
+        applyFocusWindow(if (active) true else preferredDark)
+        val attributes = window.attributes
+        attributes.screenBrightness = if (active) 0.08f else originalBrightness
+        if (active) {
+            // A still stopwatch has no use for the launcher's preferred high refresh rate.
+            val screen = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) display else {
+                @Suppress("DEPRECATION")
+                windowManager.defaultDisplay
+            }
+            val current = screen?.mode
+            val slower = screen?.supportedModes?.filter {
+                current != null && it.physicalWidth == current.physicalWidth && it.physicalHeight == current.physicalHeight
+            }?.minByOrNull { it.refreshRate }
+            if (slower != null) attributes.preferredDisplayModeId = slower.modeId
+        }
+        window.attributes = attributes
+    }
 
     @Deprecated("Use BackHandler for Compose navigation")
     override fun onBackPressed() = askToLeave()
@@ -109,7 +131,7 @@ private fun FocusSessionScreen(
     var tab by remember { mutableStateOf(0) }
     var now by remember { mutableStateOf(System.currentTimeMillis()) }
     LaunchedEffect(active) {
-        while (active) { now = System.currentTimeMillis(); delay(250) }
+        while (active) { now = System.currentTimeMillis(); delay(1_000) }
     }
     BackHandler { onBack() }
     Column(Modifier.fillMaxSize().systemBarsPadding()) {
