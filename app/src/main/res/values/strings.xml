@@ -4,8 +4,8 @@
     <string name="settings_label">Focus Settings</string>
 
     <string name="accessibility_label">Focus app timers</string>
-    <string name="accessibility_summary">Enforces the daily app time limits you set in Focus.</string>
-    <string name="accessibility_description">Focus uses this service to notice which app is in front, so it can lock an app once its daily time limit is used up. It also lets home-screen gestures open notifications or lock the screen.\n\nThe service only receives the name of the app that is on screen. It cannot read what is on your screen, and nothing ever leaves your device.</string>
+    <string name="accessibility_summary">Enforces daily app limits and the 25-minute Focus sandbox.</string>
+    <string name="accessibility_description">Focus uses this service to notice which app is in front, so it can show a wall when a daily limit is used up or return you to a 25-minute Focus session when an unchosen app opens. It also lets home-screen gestures open notifications or lock the screen.\n\nThe service only receives the name of the app that is on screen. It cannot read what is on your screen, and nothing ever leaves your device.</string>
 
     <string name="media_listener_label">Focus music section</string>
 

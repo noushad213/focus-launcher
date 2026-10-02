@@ -15,8 +15,12 @@ import android.view.accessibility.AccessibilityEvent
 import android.widget.Toast
 import androidx.core.content.ContextCompat
 import com.focus.launcher.BlockActivity
+import com.focus.launcher.FocusSessionActivity
+import com.focus.launcher.MainActivity
 import com.focus.launcher.Graph
 import com.focus.launcher.data.AppLimit
+import com.focus.launcher.data.FocusSessions
+import com.focus.launcher.data.isFocusPackageAllowed
 import com.focus.launcher.util.formatMinutes
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -36,8 +40,10 @@ class FocusAccessibilityService : AccessibilityService() {
 
     private val main = Handler(Looper.getMainLooper())
     private val activityCache = LruCache<String, Boolean>(256)
+    private val focusSessions by lazy { FocusSessions(this) }
 
     private var currentPkg: String? = null
+    private var currentCls: String? = null
     private var sessionStart = 0L
 
     /** Bumped on every foreground change so results of slow lookups for an old app are dropped. */
@@ -81,8 +87,9 @@ class FocusAccessibilityService : AccessibilityService() {
         if (Graph.limits.sessionConsent != null && cls != BlockActivity::class.java.name && Graph.apps.isHomeApp(pkg)) {
             Graph.limits.sessionConsent = null
         }
-        if (pkg == currentPkg) return
+        if (pkg == currentPkg && cls == currentCls) return
         currentPkg = pkg
+        currentCls = cls
         sessionStart = System.currentTimeMillis()
         generation++
         evaluate()
@@ -132,6 +139,18 @@ class FocusAccessibilityService : AccessibilityService() {
     private fun evaluate() {
         cancelTimers()
         val pkg = currentPkg ?: return
+        focusSessions.finishIfExpired()
+        if (focusSessions.isSandboxActive()) {
+            val dialer = getSystemService(android.telecom.TelecomManager::class.java)?.defaultDialerPackage
+            if (pkg == packageName &&
+                (currentCls == FocusSessionActivity::class.java.name || currentCls == MainActivity::class.java.name)) return
+            if (isFocusPackageAllowed(pkg, focusSessions.allowedPackages, dialer)) return
+            try {
+                startActivity(Intent(this, FocusSessionActivity::class.java)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP))
+            } catch (_: Exception) { }
+            return
+        }
         if (pkg == packageName) return
         val limits = Graph.limits
         val limit = limits.limitFor(pkg) ?: return

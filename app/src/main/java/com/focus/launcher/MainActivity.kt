@@ -35,6 +35,7 @@ import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.LifecycleStartEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.focus.launcher.data.AppEntry
+import com.focus.launcher.data.FocusSessions
 import com.focus.launcher.data.Settings
 import com.focus.launcher.data.ActionType
 import com.focus.launcher.data.GestureTrigger
@@ -91,6 +92,9 @@ class MainActivity : ComponentActivity() {
         super.onResume()
         resumed = true
         resetIdleLock()
+        val session = FocusSessions(this)
+        session.finishIfExpired()
+        if (session.isSandboxActive()) startActivity(Intent(this, FocusSessionActivity::class.java))
     }
 
     override fun onPause() {
