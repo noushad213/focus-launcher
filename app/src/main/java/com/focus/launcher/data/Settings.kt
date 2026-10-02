@@ -117,6 +117,8 @@ data class EdgePill(
     }
 }
 
+data class ImportedWallpaper(val id: String, val name: String, val darkTop: Boolean)
+
 /**
  * Every user-facing preference of the launcher. Immutable; changed through [SettingsStore.update].
  *
@@ -128,6 +130,7 @@ data class Settings(
     val dark: Boolean = true,
     /** Empty means the plain black or white background selected by [dark]. */
     val wallpaperId: String = "",
+    val importedWallpapers: List<ImportedWallpaper> = emptyList(),
     val font: FontChoice = FontChoice.SANS,
     val textScale: Float = 1f,
     val hideStatusBar: Boolean = false,
@@ -218,6 +221,11 @@ data class Settings(
         put("v", SCHEMA)
         put("dark", dark)
         put("wallpaperId", wallpaperId)
+        put("importedWallpapers", JSONArray().apply {
+            importedWallpapers.forEach { wallpaper ->
+                put(JSONObject().put("id", wallpaper.id).put("name", wallpaper.name).put("darkTop", wallpaper.darkTop))
+            }
+        })
         put("font", font.name)
         put("textScale", textScale.toDouble())
         put("hideStatusBar", hideStatusBar)
@@ -296,6 +304,18 @@ data class Settings(
             return Settings(
                 dark = o.optBoolean("dark", d.dark),
                 wallpaperId = o.optString("wallpaperId", d.wallpaperId),
+                importedWallpapers = o.optJSONArray("importedWallpapers")?.let { array ->
+                    (0 until array.length()).mapNotNull { index ->
+                        array.optJSONObject(index)?.let { item ->
+                            val id = item.optString("id")
+                            if (!id.matches(Regex("[0-9a-f-]{36}"))) null else ImportedWallpaper(
+                                id = id,
+                                name = item.optString("name").ifBlank { "Imported wallpaper" },
+                                darkTop = item.optBoolean("darkTop", true),
+                            )
+                        }
+                    }
+                } ?: emptyList(),
                 font = enumOr(o.optString("font"), d.font),
                 textScale = o.optDouble("textScale", d.textScale.toDouble()).toFloat().coerceIn(0.8f, 1.4f),
                 hideStatusBar = o.optBoolean("hideStatusBar", d.hideStatusBar),

@@ -2,6 +2,8 @@ package com.focus.launcher.ui.home
 
 import androidx.annotation.DrawableRes
 import com.focus.launcher.R
+import com.focus.launcher.data.ImportedWallpaper
+import com.focus.launcher.data.Settings
 
 data class HomeWallpaper(
     val id: String,
@@ -25,4 +27,13 @@ object HomeWallpapers {
     )
 
     fun find(id: String): HomeWallpaper? = all.firstOrNull { it.id == id }
+
+    fun imported(settings: Settings): ImportedWallpaper? = settings.importedWallpapers.firstOrNull {
+        settings.wallpaperId == "custom:${it.id}"
+    }
+
+    fun hasSelection(settings: Settings): Boolean = find(settings.wallpaperId) != null || imported(settings) != null
+
+    fun darkTop(settings: Settings): Boolean = find(settings.wallpaperId)?.darkTop
+        ?: imported(settings)?.darkTop ?: settings.dark
 }

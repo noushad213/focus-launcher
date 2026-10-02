@@ -346,7 +346,8 @@ internal fun AppearancePage(settings: Settings, onBack: () -> Unit) {
     Page("Appearance", onBack) {
         Section("Black and white")
         SettingRow("Theme", subtitle = "Pure black saves battery on OLED screens.", value = if (settings.dark) "Black" else "White", onClick = { dialog = LookDialog.THEME })
-        SettingRow("Home wallpaper", value = HomeWallpapers.find(settings.wallpaperId)?.name ?: "None", onClick = { dialog = LookDialog.WALLPAPER })
+        SettingRow("Home wallpaper", value = HomeWallpapers.find(settings.wallpaperId)?.name
+            ?: HomeWallpapers.imported(settings)?.name ?: "None", onClick = { dialog = LookDialog.WALLPAPER })
         SettingRow("Typeface", value = settings.font.label, onClick = { dialog = LookDialog.FONT })
         SettingRow("Text size", value = TEXT_SIZES.firstOrNull { it.first == settings.textScale }?.second ?: "Default", onClick = { dialog = LookDialog.SIZE })
 
@@ -363,7 +364,12 @@ internal fun AppearancePage(settings: Settings, onBack: () -> Unit) {
     when (dialog) {
         LookDialog.NONE -> Unit
         LookDialog.THEME -> ChoiceDialog("Theme", listOf(true to "Black", false to "White"), settings.dark, close) { v -> update { it.copy(dark = v) } }
-        LookDialog.WALLPAPER -> WallpaperPickerDialog(settings.wallpaperId, close) { id -> update { it.copy(wallpaperId = id) } }
+        LookDialog.WALLPAPER -> WallpaperPickerDialog(
+            settings = settings,
+            onDismiss = close,
+            onSelect = { id -> update { it.copy(wallpaperId = id) } },
+            onImport = { item -> update { it.copy(importedWallpapers = it.importedWallpapers + item, wallpaperId = "custom:${item.id}") } },
+        )
         LookDialog.FONT -> ChoiceDialog("Typeface", FontChoice.entries.map { it to it.label }, settings.font, close) { v -> update { it.copy(font = v) } }
         LookDialog.LAUNCH -> ChoiceDialog("Opening apps", LaunchAnimation.entries.map { it to it.label }, settings.launchAnimation, close) { v -> update { it.copy(launchAnimation = v) } }
         LookDialog.SIZE -> ChoiceDialog("Text size", TEXT_SIZES, settings.textScale, close) { v -> update { it.copy(textScale = v) } }

@@ -43,6 +43,9 @@ class SettingsMigrationTest {
     @Test fun `wallpaper choice survives a round trip and older settings stay plain`() {
         assertEquals("", Settings.fromJson(JSONObject()).wallpaperId)
         assertEquals("ink_lake", Settings.fromJson(Settings(wallpaperId = "ink_lake").toJson()).wallpaperId)
+        val imported = ImportedWallpaper("550e8400-e29b-41d4-a716-446655440000", "My mountains", false)
+        val settings = Settings(wallpaperId = "custom:${imported.id}", importedWallpapers = listOf(imported))
+        assertEquals(settings, Settings.fromJson(settings.toJson()))
     }
 
     @Test fun `home idle lock is optional and survives a round trip`() {

@@ -11,6 +11,7 @@ import com.focus.launcher.ui.components.MenuRow
 import com.focus.launcher.ui.components.Hairline
 import com.focus.launcher.ui.components.TextInputDialog
 import android.Manifest
+import android.graphics.BitmapFactory
 import android.content.Context
 import android.content.Intent
 import android.database.ContentObserver
@@ -44,6 +45,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
@@ -54,6 +56,8 @@ import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Paint
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
@@ -77,6 +81,7 @@ import com.focus.launcher.data.FontChoice
 import com.focus.launcher.data.SHORTCUT_CAMERA
 import com.focus.launcher.data.SHORTCUT_PHONE
 import com.focus.launcher.data.Settings
+import com.focus.launcher.data.WallpaperStorage
 import com.focus.launcher.data.GestureTrigger
 import com.focus.launcher.data.ActionType
 import com.focus.launcher.ui.executeAction
@@ -99,6 +104,8 @@ import com.focus.launcher.ui.launchOptions
 import com.focus.launcher.ui.theme.LocalFocusColors
 import com.focus.launcher.util.Perms
 import java.time.LocalDate
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 /**
  * Page one of the launcher. Top to bottom: the clock, today's screen time in plain words under it,
@@ -124,8 +131,16 @@ fun HomeScreen(
     onOpenReview: (week: LocalDate?) -> Unit,
 ) {
     val c = LocalFocusColors.current
-    val wallpaper = HomeWallpapers.find(settings.wallpaperId)
     val context = LocalContext.current
+    val wallpaper = HomeWallpapers.find(settings.wallpaperId)
+    val imported = HomeWallpapers.imported(settings)
+    val importedBitmap by produceState<ImageBitmap?>(null, imported?.id) {
+        value = imported?.let { item ->
+            withContext(Dispatchers.IO) {
+                BitmapFactory.decodeFile(WallpaperStorage.file(context, item.id).path)?.asImageBitmap()
+            }
+        }
+    }
     val actionScope = rememberCoroutineScope()
     val haptics = LocalHapticFeedback.current
     val now by rememberNow()
@@ -203,6 +218,7 @@ fun HomeScreen(
     BoxWithConstraints(
         Modifier
             .fillMaxSize()
+            .background(c.bg)
             .clipToBounds()
             .pointerInput(settings.gestureActions, apps) {
                 val threshold = 64.dp.toPx()
@@ -244,6 +260,13 @@ fun HomeScreen(
         if (wallpaper != null) {
             Image(
                 painter = painterResource(wallpaper.image),
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize(),
+            )
+        } else if (importedBitmap != null) {
+            Image(
+                bitmap = importedBitmap!!,
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize(),
@@ -312,7 +335,7 @@ fun HomeScreen(
         val favoriteSize = fit.textSp.sp
         val favoritePadding = fit.padDp.dp
 
-        Box(Modifier.fillMaxSize().wallpaperContrast(wallpaper != null)) {
+        Box(Modifier.fillMaxSize().wallpaperContrast(wallpaper != null || importedBitmap != null)) {
         Column(
             Modifier.fillMaxSize().systemBarsPadding().padding(horizontal = 18.dp),
             horizontalAlignment = settings.homeAlign.horizontal(),

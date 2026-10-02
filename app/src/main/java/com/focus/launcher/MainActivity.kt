@@ -109,7 +109,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        Graph.settings.value.let { applyFocusWindow(HomeWallpapers.find(it.wallpaperId)?.darkTop ?: it.dark, it.hideStatusBar) }
+        Graph.settings.value.let { applyFocusWindow(HomeWallpapers.darkTop(it), it.hideStatusBar) }
         // First start ever: the introduction, once. Marked as seen here already, so that pressing
         // Home in the middle of it never brings it back.
         if (savedInstanceState == null && !Graph.state.tutorialSeen) {
@@ -118,8 +118,8 @@ class MainActivity : ComponentActivity() {
         }
         setContent {
             val settings by Graph.settings.flow.collectAsStateWithLifecycle()
-            LaunchedEffect(settings.dark, settings.wallpaperId, settings.hideStatusBar) {
-                applyFocusWindow(HomeWallpapers.find(settings.wallpaperId)?.darkTop ?: settings.dark, settings.hideStatusBar)
+            LaunchedEffect(settings.dark, settings.wallpaperId, settings.importedWallpapers, settings.hideStatusBar) {
+                applyFocusWindow(HomeWallpapers.darkTop(settings), settings.hideStatusBar)
             }
             FocusTheme(settings) { Launcher(settings, homePresses) }
         }
@@ -273,7 +273,7 @@ private fun Launcher(settings: Settings, homePresses: Flow<Unit>) {
             },
         ) {
             if (page == 0) {
-                CompositionLocalProvider(LocalFocusColors provides if (HomeWallpapers.find(settings.wallpaperId) != null) BlackTheme else LocalFocusColors.current) {
+                CompositionLocalProvider(LocalFocusColors provides if (HomeWallpapers.hasSelection(settings)) BlackTheme else LocalFocusColors.current) {
                     HomeScreen(
                         settings = settings,
                         apps = apps,
