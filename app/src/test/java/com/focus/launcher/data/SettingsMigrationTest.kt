@@ -40,6 +40,11 @@ class SettingsMigrationTest {
         assertEquals(s, Settings.fromJson(s.toJson()))
     }
 
+    @Test fun `wallpaper choice survives a round trip and older settings stay plain`() {
+        assertEquals("", Settings.fromJson(JSONObject()).wallpaperId)
+        assertEquals("ink_lake", Settings.fromJson(Settings(wallpaperId = "ink_lake").toJson()).wallpaperId)
+    }
+
     @Test fun `home idle lock is optional and survives a round trip`() {
         assertEquals(0, Settings.fromJson(JSONObject()).homeIdleLockSeconds)
         assertEquals(120, Settings.fromJson(Settings(homeIdleLockSeconds = 120).toJson()).homeIdleLockSeconds)

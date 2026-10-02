@@ -2,6 +2,7 @@ package com.focus.launcher.ui.home
 
 import androidx.compose.foundation.border
 import androidx.compose.foundation.background
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.shape.RoundedCornerShape
 import com.focus.launcher.data.Tip
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -25,6 +26,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -48,11 +50,17 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.Paint
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -116,6 +124,7 @@ fun HomeScreen(
     onOpenReview: (week: LocalDate?) -> Unit,
 ) {
     val c = LocalFocusColors.current
+    val wallpaper = HomeWallpapers.find(settings.wallpaperId)
     val context = LocalContext.current
     val actionScope = rememberCoroutineScope()
     val haptics = LocalHapticFeedback.current
@@ -232,6 +241,14 @@ fun HomeScreen(
                 )
             },
     ) {
+        if (wallpaper != null) {
+            Image(
+                painter = painterResource(wallpaper.image),
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
 
         // A home screen must never scroll or push its corner shortcuts off the edge. Estimate the
         // height each arrangement needs (constants measured on a real screen) and take the
@@ -295,6 +312,7 @@ fun HomeScreen(
         val favoriteSize = fit.textSp.sp
         val favoritePadding = fit.padDp.dp
 
+        Box(Modifier.fillMaxSize().wallpaperContrast(wallpaper != null)) {
         Column(
             Modifier.fillMaxSize().systemBarsPadding().padding(horizontal = 18.dp),
             horizontalAlignment = settings.homeAlign.horizontal(),
@@ -489,6 +507,7 @@ fun HomeScreen(
         onLongPress = { pill -> executeAction(context, actionScope, pill.longPressAction, apps, onOpenDrawer) },
         onSwipeIn = { executeAction(context, actionScope, it.inwardSwipeAction, apps, onOpenDrawer) },
         )
+        }
     }
 
     if (choosingClockTap) ClockTapDialog(settings, apps) { choosingClockTap = false }
@@ -587,6 +606,14 @@ fun HomeScreen(
             onPick = { setShortcut(left, it.key) },
         )
     }
+}
+
+/** White marks invert the image underneath: light wallpaper gets black text, dark gets white. */
+private fun Modifier.wallpaperContrast(enabled: Boolean): Modifier = if (!enabled) this else this.drawWithContent {
+    val paint = Paint().apply { blendMode = BlendMode.Difference }
+    drawContext.canvas.saveLayer(Rect(0f, 0f, size.width, size.height), paint)
+    drawContent()
+    drawContext.canvas.restore()
 }
 /**
  * A tip, framed so that it cannot be mistaken for part of the home screen: the gesture in full brightness, what it does next to it, quieter. Short enough for one

@@ -52,6 +52,7 @@ import com.focus.launcher.ui.components.ToggleRow
 import com.focus.launcher.ui.home.ClockTapDialog
 import com.focus.launcher.ui.home.clockTapLabel
 import com.focus.launcher.ui.home.shortcutLabel
+import com.focus.launcher.ui.home.HomeWallpapers
 import com.focus.launcher.ui.launchApp
 import com.focus.launcher.ui.theme.LocalFocusColors
 
@@ -333,7 +334,7 @@ internal fun HiddenAppsPage(settings: Settings, apps: List<AppEntry>, onBack: ()
 
 // ---- Appearance ------------------------------------------------------------------------------
 
-private enum class LookDialog { NONE, THEME, FONT, SIZE, LAUNCH }
+private enum class LookDialog { NONE, THEME, WALLPAPER, FONT, SIZE, LAUNCH }
 
 private val TEXT_SIZES = listOf(0.9f to "Small", 1f to "Default", 1.1f to "Large", 1.2f to "Larger")
 
@@ -345,6 +346,7 @@ internal fun AppearancePage(settings: Settings, onBack: () -> Unit) {
     Page("Appearance", onBack) {
         Section("Black and white")
         SettingRow("Theme", subtitle = "Pure black saves battery on OLED screens.", value = if (settings.dark) "Black" else "White", onClick = { dialog = LookDialog.THEME })
+        SettingRow("Home wallpaper", value = HomeWallpapers.find(settings.wallpaperId)?.name ?: "None", onClick = { dialog = LookDialog.WALLPAPER })
         SettingRow("Typeface", value = settings.font.label, onClick = { dialog = LookDialog.FONT })
         SettingRow("Text size", value = TEXT_SIZES.firstOrNull { it.first == settings.textScale }?.second ?: "Default", onClick = { dialog = LookDialog.SIZE })
 
@@ -361,6 +363,7 @@ internal fun AppearancePage(settings: Settings, onBack: () -> Unit) {
     when (dialog) {
         LookDialog.NONE -> Unit
         LookDialog.THEME -> ChoiceDialog("Theme", listOf(true to "Black", false to "White"), settings.dark, close) { v -> update { it.copy(dark = v) } }
+        LookDialog.WALLPAPER -> WallpaperPickerDialog(settings.wallpaperId, close) { id -> update { it.copy(wallpaperId = id) } }
         LookDialog.FONT -> ChoiceDialog("Typeface", FontChoice.entries.map { it to it.label }, settings.font, close) { v -> update { it.copy(font = v) } }
         LookDialog.LAUNCH -> ChoiceDialog("Opening apps", LaunchAnimation.entries.map { it to it.label }, settings.launchAnimation, close) { v -> update { it.copy(launchAnimation = v) } }
         LookDialog.SIZE -> ChoiceDialog("Text size", TEXT_SIZES, settings.textScale, close) { v -> update { it.copy(textScale = v) } }

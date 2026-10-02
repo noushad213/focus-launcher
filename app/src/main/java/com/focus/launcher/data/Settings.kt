@@ -126,6 +126,8 @@ data class EdgePill(
 data class Settings(
     // Appearance
     val dark: Boolean = true,
+    /** Empty means the plain black or white background selected by [dark]. */
+    val wallpaperId: String = "",
     val font: FontChoice = FontChoice.SANS,
     val textScale: Float = 1f,
     val hideStatusBar: Boolean = false,
@@ -215,6 +217,7 @@ data class Settings(
     fun toJson(): JSONObject = JSONObject().apply {
         put("v", SCHEMA)
         put("dark", dark)
+        put("wallpaperId", wallpaperId)
         put("font", font.name)
         put("textScale", textScale.toDouble())
         put("hideStatusBar", hideStatusBar)
@@ -292,6 +295,7 @@ data class Settings(
             val d = Settings()
             return Settings(
                 dark = o.optBoolean("dark", d.dark),
+                wallpaperId = o.optString("wallpaperId", d.wallpaperId),
                 font = enumOr(o.optString("font"), d.font),
                 textScale = o.optDouble("textScale", d.textScale.toDouble()).toFloat().coerceIn(0.8f, 1.4f),
                 hideStatusBar = o.optBoolean("hideStatusBar", d.hideStatusBar),

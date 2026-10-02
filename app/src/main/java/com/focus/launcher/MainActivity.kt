@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -46,9 +47,12 @@ import com.focus.launcher.service.FocusAccessibilityService
 import com.focus.launcher.ui.drawer.AppMenu
 import com.focus.launcher.ui.drawer.DrawerScreen
 import com.focus.launcher.ui.home.HomeScreen
+import com.focus.launcher.ui.home.HomeWallpapers
 import com.focus.launcher.ui.launchApp
 import com.focus.launcher.ui.executeAction
 import com.focus.launcher.ui.theme.FocusTheme
+import com.focus.launcher.ui.theme.BlackTheme
+import com.focus.launcher.ui.theme.LocalFocusColors
 import com.focus.launcher.ui.theme.applyFocusWindow
 import com.focus.launcher.util.Perms
 import kotlin.math.abs
@@ -105,7 +109,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        Graph.settings.value.let { applyFocusWindow(it.dark, it.hideStatusBar) }
+        Graph.settings.value.let { applyFocusWindow(HomeWallpapers.find(it.wallpaperId)?.darkTop ?: it.dark, it.hideStatusBar) }
         // First start ever: the introduction, once. Marked as seen here already, so that pressing
         // Home in the middle of it never brings it back.
         if (savedInstanceState == null && !Graph.state.tutorialSeen) {
@@ -114,7 +118,9 @@ class MainActivity : ComponentActivity() {
         }
         setContent {
             val settings by Graph.settings.flow.collectAsStateWithLifecycle()
-            LaunchedEffect(settings.dark, settings.hideStatusBar) { applyFocusWindow(settings.dark, settings.hideStatusBar) }
+            LaunchedEffect(settings.dark, settings.wallpaperId, settings.hideStatusBar) {
+                applyFocusWindow(HomeWallpapers.find(settings.wallpaperId)?.darkTop ?: settings.dark, settings.hideStatusBar)
+            }
             FocusTheme(settings) { Launcher(settings, homePresses) }
         }
     }
@@ -267,23 +273,25 @@ private fun Launcher(settings: Settings, homePresses: Flow<Unit>) {
             },
         ) {
             if (page == 0) {
-                HomeScreen(
-                    settings = settings,
-                    apps = apps,
-                    today = today,
-                    usageAccess = usageAccess,
-                    setupIncomplete = setupIncomplete,
-                    pendingReview = pendingReview,
-                    resumeCount = resumeCount,
-                    onLaunch = launch,
-                    onAppMenu = { Graph.state.did(Tip.APP_MENU); menuApp = it },
-                    onOpenDrawer = { focusSearch ->
-                        wantsSearchFocus = focusSearch
-                        scope.launch { pager.animateScrollToPage(1) }
-                    },
-                    onOpenSettings = { route -> context.startActivity(SettingsActivity.intent(context, route)) },
-                    onOpenReview = { week -> context.startActivity(ReviewActivity.intent(context, week)) },
-                )
+                CompositionLocalProvider(LocalFocusColors provides if (HomeWallpapers.find(settings.wallpaperId) != null) BlackTheme else LocalFocusColors.current) {
+                    HomeScreen(
+                        settings = settings,
+                        apps = apps,
+                        today = today,
+                        usageAccess = usageAccess,
+                        setupIncomplete = setupIncomplete,
+                        pendingReview = pendingReview,
+                        resumeCount = resumeCount,
+                        onLaunch = launch,
+                        onAppMenu = { Graph.state.did(Tip.APP_MENU); menuApp = it },
+                        onOpenDrawer = { focusSearch ->
+                            wantsSearchFocus = focusSearch
+                            scope.launch { pager.animateScrollToPage(1) }
+                        },
+                        onOpenSettings = { route -> context.startActivity(SettingsActivity.intent(context, route)) },
+                        onOpenReview = { week -> context.startActivity(ReviewActivity.intent(context, week)) },
+                    )
+                }
             } else {
                 DrawerScreen(
                     settings = settings,
